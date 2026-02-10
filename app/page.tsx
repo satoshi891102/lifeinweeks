@@ -59,35 +59,96 @@ function calculateStats(birthday: Date): Stats {
   };
 }
 
-/* ─── Week dot component ─── */
-function WeekDot({ index, weeksLived, hoveredWeek, setHoveredWeek }: {
-  index: number;
+/* ─── Canvas-based grid (replaces 4,160 individual React components) ─── */
+function WeekGrid({ weeksLived, onHoverWeek }: {
   weeksLived: number;
-  hoveredWeek: number | null;
-  setHoveredWeek: (w: number | null) => void;
+  onHoverWeek: (week: number | null) => void;
 }) {
-  const phase = getPhase(index);
-  const isLived = index < weeksLived;
-  const isCurrent = index === weeksLived;
-  const isHovered = hoveredWeek === index;
-  const year = Math.floor(index / WEEKS_PER_YEAR);
-  const weekInYear = index % WEEKS_PER_YEAR;
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const DOT = 6;
+  const GAP = 1;
+  const LABEL_W = 28;
+  const CELL = DOT + GAP;
+  const W = LABEL_W + WEEKS_PER_YEAR * CELL;
+  const H = LIFE_EXPECTANCY * CELL;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, W, H);
+
+    // Year labels
+    ctx.font = "9px monospace";
+    ctx.fillStyle = "#D1D5DB";
+    ctx.textAlign = "right";
+    for (let y = 0; y < LIFE_EXPECTANCY; y++) {
+      if (y % 5 === 0) {
+        ctx.fillText(String(y), LABEL_W - 4, y * CELL + DOT);
+      }
+    }
+
+    // Dots
+    for (let y = 0; y < LIFE_EXPECTANCY; y++) {
+      for (let w = 0; w < WEEKS_PER_YEAR; w++) {
+        const idx = y * WEEKS_PER_YEAR + w;
+        const phase = getPhase(idx);
+        const isLived = idx < weeksLived;
+        const isCurrent = idx === weeksLived;
+        const x = LABEL_W + w * CELL;
+        const yPos = y * CELL;
+
+        if (isCurrent) {
+          ctx.fillStyle = "#EF4444";
+          ctx.fillRect(x - 1, yPos - 1, DOT + 2, DOT + 2);
+        } else {
+          ctx.globalAlpha = isLived ? 1 : 0.3;
+          ctx.fillStyle = isLived ? phase.color : "#E5E7EB";
+          ctx.fillRect(x, yPos, DOT, DOT);
+          ctx.globalAlpha = 1;
+        }
+      }
+    }
+  }, [weeksLived, W, H, DOT, GAP, CELL, LABEL_W]);
+
+  const getWeekFromEvent = (e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = W / rect.width;
+    const scaleY = H / rect.height;
+    let clientX: number, clientY: number;
+    if ("touches" in e) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+    const x = (clientX - rect.left) * scaleX;
+    const y = (clientY - rect.top) * scaleY;
+    const week = Math.floor((x - LABEL_W) / CELL);
+    const year = Math.floor(y / CELL);
+    if (week < 0 || week >= WEEKS_PER_YEAR || year < 0 || year >= LIFE_EXPECTANCY) return null;
+    return year * WEEKS_PER_YEAR + week;
+  };
 
   return (
-    <div
-      className="relative"
-      onMouseEnter={() => setHoveredWeek(index)}
-      onMouseLeave={() => setHoveredWeek(null)}
-      title={`Year ${year}, Week ${weekInYear + 1} — ${phase.name}`}
-    >
-      <div
-        className={`w-[5px] h-[5px] sm:w-[6px] sm:h-[6px] rounded-[1px] transition-all duration-150 ${
-          isCurrent ? "ring-2 ring-red-500 ring-offset-1 scale-150 z-10" : ""
-        } ${isHovered ? "scale-[2] z-10" : ""}`}
-        style={{
-          background: isLived ? phase.color : isCurrent ? "#EF4444" : "#E5E7EB",
-          opacity: isLived ? 1 : 0.3,
-        }}
+    <div ref={containerRef} className="overflow-x-auto">
+      <canvas
+        ref={canvasRef}
+        style={{ width: W, height: H }}
+        className="cursor-crosshair"
+        onMouseMove={(e) => onHoverWeek(getWeekFromEvent(e))}
+        onMouseLeave={() => onHoverWeek(null)}
+        onClick={(e) => onHoverWeek(getWeekFromEvent(e))}
+        onTouchStart={(e) => onHoverWeek(getWeekFromEvent(e))}
       />
     </div>
   );
@@ -99,7 +160,7 @@ export default function LifeInWeeks() {
   const [showGrid, setShowGrid] = useState(false);
   const [hoveredWeek, setHoveredWeek] = useState<number | null>(null);
   const [animationDone, setAnimationDone] = useState(false);
-  const gridRef = useRef<HTMLDivElement>(null);
+  // gridRef removed — canvas-based grid handles its own ref
 
   const stats = useMemo(() => {
     if (!birthday) return null;
@@ -115,7 +176,7 @@ export default function LifeInWeeks() {
 
   const handleShare = async () => {
     if (!stats) return;
-    const text = `I've lived ${stats.weeksLived.toLocaleString()} of my ~${TOTAL_WEEKS.toLocaleString()} weeks (${stats.percentLived.toFixed(1)}%).\n\n${stats.weeksRemaining.toLocaleString()} weeks remaining.\n${stats.summersLeft} more summers.\n\nVisualize yours → lifeinweeks.vercel.app`;
+    const text = `I've lived ${stats.weeksLived.toLocaleString()} of my ~${TOTAL_WEEKS.toLocaleString()} weeks (${stats.percentLived.toFixed(1)}%).\n\n${stats.weeksRemaining.toLocaleString()} weeks remaining.\n${stats.summersLeft} more summers.\n\nVisualize yours → lifeinweeks-azure.vercel.app`;
 
     if (navigator.share) {
       try { await navigator.share({ title: "Life in Weeks", text }); } catch {}
@@ -256,44 +317,9 @@ export default function LifeInWeeks() {
               </div>
             </div>
 
-            {/* The Grid */}
-            <div className="bg-white p-4 sm:p-6 rounded-3xl border border-gray-200 overflow-x-auto">
-              {/* Column header (week numbers) */}
-              <div className="flex gap-[1px] mb-1 ml-8">
-                {[1, 10, 20, 30, 40, 52].map((w) => (
-                  <div
-                    key={w}
-                    className="text-[8px] text-gray-300"
-                    style={{ position: "absolute", left: `${(w / 52) * 100}%` }}
-                  >
-                  </div>
-                ))}
-              </div>
-
-              {/* Grid: 80 rows (years) × 52 columns (weeks) */}
-              <div ref={gridRef} className="relative">
-                {Array.from({ length: LIFE_EXPECTANCY }).map((_, year) => (
-                  <div key={year} className="flex items-center gap-[1px] mb-[1px]">
-                    {/* Year label */}
-                    <div className="w-7 text-right pr-1.5 text-[9px] text-gray-300 font-mono shrink-0">
-                      {year % 5 === 0 ? year : ""}
-                    </div>
-                    {/* Weeks */}
-                    {Array.from({ length: WEEKS_PER_YEAR }).map((_, week) => {
-                      const weekIndex = year * WEEKS_PER_YEAR + week;
-                      return (
-                        <WeekDot
-                          key={weekIndex}
-                          index={weekIndex}
-                          weeksLived={stats.weeksLived}
-                          hoveredWeek={hoveredWeek}
-                          setHoveredWeek={setHoveredWeek}
-                        />
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
+            {/* The Grid — Canvas-based for performance */}
+            <div className="bg-white p-4 sm:p-6 rounded-3xl border border-gray-200">
+              <WeekGrid weeksLived={stats.weeksLived} onHoverWeek={setHoveredWeek} />
             </div>
 
             {/* Hover tooltip */}
@@ -302,6 +328,17 @@ export default function LifeInWeeks() {
                 Year {Math.floor(hoveredWeek / WEEKS_PER_YEAR)}, Week {(hoveredWeek % WEEKS_PER_YEAR) + 1} — {getPhase(hoveredWeek).name}
                 {hoveredWeek < stats.weeksLived && " (lived)"}
                 {hoveredWeek === stats.weeksLived && " ← YOU ARE HERE"}
+              </div>
+            )}
+
+            {/* Beyond expectancy message */}
+            {stats.currentAge > LIFE_EXPECTANCY && (
+              <div className="mt-6 max-w-lg mx-auto text-center p-6 bg-amber-50 rounded-2xl border border-amber-200">
+                <p className="text-lg font-semibold text-amber-800">✨ You&apos;re in bonus time</p>
+                <p className="text-sm text-amber-600 mt-2">
+                  You&apos;ve lived beyond the average life expectancy. Every week from here is a gift.
+                  Make each one extraordinary.
+                </p>
               </div>
             )}
 
