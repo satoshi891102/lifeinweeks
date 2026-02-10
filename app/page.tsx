@@ -324,6 +324,31 @@ export default function LifeInWeeks() {
             </div>
           </div>
 
+          {/* More tools */}
+          <div className="max-w-lg mx-auto px-4 mt-8">
+            <p className="text-xs text-gray-400 uppercase tracking-wider mb-3 text-center">More free tools</p>
+            <div className="grid grid-cols-2 gap-3">
+              <a
+                href="https://burnrate-seven.vercel.app"
+                className="p-4 rounded-xl bg-white border border-gray-200 hover:border-gray-400 transition-all group"
+                target="_blank"
+              >
+                <div className="text-lg mb-1">🔥</div>
+                <div className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors">BurnRate</div>
+                <div className="text-xs text-gray-400">How much is this meeting costing?</div>
+              </a>
+              <a
+                href="https://haggle-kappa.vercel.app/check"
+                className="p-4 rounded-xl bg-white border border-gray-200 hover:border-gray-400 transition-all group"
+                target="_blank"
+              >
+                <div className="text-lg mb-1">💸</div>
+                <div className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors">Am I Overpaying?</div>
+                <div className="text-xs text-gray-400">Check your bills in 10 seconds</div>
+              </a>
+            </div>
+          </div>
+
           {/* Footer */}
           <footer className="text-center py-8 text-xs text-gray-400 border-t border-gray-200 mt-8">
             <p>Based on an average life expectancy of {LIFE_EXPECTANCY} years.</p>
